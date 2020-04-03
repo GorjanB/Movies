@@ -1,0 +1,124 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+Loading data set
+```{r}
+library(tidyverse)
+movies <- read_csv("Movie_Movies.csv")
+actors <- read_csv("Movie_Actors.csv")
+writers <- read_csv("Movie_Writer.csv")
+genres <- read_csv("Movie_Genres.csv")
+additional_ratings <- read_csv("Movie_AdditionalRating.csv")
+movies
+actors
+writers
+genres
+additional_ratings
+```
+Top 10 directors
+```{r}
+summary(additional_ratings)
+```
+Combine the different movie tables by imdbID
+```{r}
+rated <- movies %>%
+  inner_join(additional_ratings, by = "imdbID") %>% 
+  select(Director, imdbRating, RatingSource, Rating, imdbVotes, imdbID) %>%
+  distinct()
+  
+rated
+```
+Descriptive statistics of movies
+```{r}
+summary(rated)
+```
+Add colums for Rotten Tomatoes and Meta Critic ratings
+```{r}
+rated <- rated %>%
+  mutate(RottenTomatoesRating = ifelse(RatingSource == "Rotten Tomatoes", Rating, NA))
+
+rated <- rated %>%
+  mutate(MetacriticRating = ifelse(RatingSource == "Metacritic", Rating, NA))
+
+rated
+```
+Convert Roten Tomatoes and Meta Critic rating to format 0-100
+```{r}
+rated <- rated %>% mutate(RottenTomatoesRating = substr(RottenTomatoesRating,1,nchar(RottenTomatoesRating)-1))
+
+rated <- rated %>% mutate(MetacriticRating = substr(MetacriticRating,1,nchar(MetacriticRating)-4))
+
+rated
+```
+Convert ratings to 0-10
+```{r}
+rated <- rated %>% mutate_at(c('RottenTomatoesRating','MetacriticRating'), ~as.numeric(.)) %>%
+  mutate(RottenTomatoesRating = RottenTomatoesRating / 10) %>%
+  mutate(MetacriticRating = MetacriticRating / 10)
+
+rated
+```
+Filter top 10 popular directors byImdb ratings
+```{r}
+top10 <- movies %>% group_by(Director) %>%
+  summarise(IMDBscore = mean(imdbRating, na.rm = TRUE),count = n(), imdbVotes = sum(imdbVotes)) %>%
+  arrange(desc(IMDBscore)) %>%
+  filter(imdbVotes >= 1000334)
+
+top10 <- slice(top10, 1:10)
+top10
+```
+Filter all the movies from the top directors
+```{r}
+topdirectors <- movies %>% filter(Director %in% top10$Director)
+topdirectors
+```
+Top directors movie genres
+```{r}
+topgenres <- topdirectors %>% inner_join(genres, by = "imdbID") %>% distinct()
+ggplot(data = topgenres) +
+  geom_bar(mapping = aes(x = Director, fill = Genre), position = "dodge")
+```
+```{r}
+#top3 genres
+#group by genre, count = n(), order by
+topgenres %>% group_by(Genre) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n))
+```
+```{r}
+ggplot(data = topgenres) +
+  geom_bar(mapping = aes(x = Genre, fill = Genre))
+```
+```{r}
+topdirectors %>% group_by(Rated) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n))
+```
+```{r}
+ggplot(data = topdirectors) +
+  geom_bar(mapping = aes(x = Rated, fill = Director))
+```
+Top directors by country
+```{r}
+topdirectors %>% group_by(Country) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n))
+```
+Writers that work the most with the top directors
+```{r}
+topwriters <- topdirectors %>% inner_join(writers, by = "imdbID") %>% distinct()
+topwriters %>% group_by(Person) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n))
+#ggplot(data = topwriters) +
+#  geom_bar(mapping = aes(x = Director, fill = Genre), position = "dodge")
+```
+
+```{r}
+topwriters %>% group_by(Director,Person) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n)) %>%
+  rename(Writer = Person)
+```
